@@ -1,0 +1,21 @@
+# Секреты / токены
+.env
+.env.local
+*.secret.json
+
+# Личные данные пользователя (персонаж, токены, снапшоты)
+data/
+pob/fixtures/*.json
+!pob/fixtures/.gitkeep
+
+# Сгенерированный дашборд с личными данными
+dashboard/out/
+
+# Claude локальные per-user
+.claude/settings.local.json
+
+# OS / IDE
+Thumbs.db
+.DS_Store
+.idea/
+node_modules/
