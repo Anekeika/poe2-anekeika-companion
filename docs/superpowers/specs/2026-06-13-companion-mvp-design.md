@@ -1,9 +1,10 @@
 # PoE 2 Companion — MVP Design
 
 - **Дата:** 2026-06-13
-- **Статус:** согласован, готов к написанию плана (writing-plans)
-- **Проект:** `poe2-anekeika-companion` (git-сабмодуль в `Games/`)
-- **Целевое место спеки после scaffold'а:** `Games/poe2-anekeika-companion/docs/superpowers/specs/2026-06-13-companion-mvp-design.md` (сейчас лежит в `Machine/Outputs/`, чтобы не создавать файлы в пути, который станет отдельным репо)
+- **Статус:** согласован; План 1 (фундамент + спайк) выполнен, **гейт №1 ЗЕЛЁНЫЙ**
+- **Проект:** `poe2-anekeika-companion` (git-репо в `Games/`)
+
+> **Поправка 2026-06-13 (по итогам спайка):** движок `pob/` работает в **Linux-рантайме (WSL/Docker)**, не на голом Windows — под Windows нативные C-модули PoB (luautf8 и пр.) ABI-несовместимы. Это меняет §6 и §11: только модуль `pob/` требует WSL/Docker; ingest/store/dashboard/advisor остаются нативными кросс-платформенными. Доказательство гейта — `docs/superpowers/spike-pob2-result.md` (67 ассертов расчётных spec'ов форка, 0 провалов).
 
 ---
 
