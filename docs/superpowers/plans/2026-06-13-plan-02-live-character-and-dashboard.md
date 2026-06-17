@@ -12,7 +12,7 @@
 
 **Pluggable-источник — два impl одного интерфейса `getCharacter() -> {items, passives, meta}`:**
 - **manual** (Task 2): пользователь даёт PoB-код или два JSON → нормализуем в store. Работает день 1.
-- **oauth** (Task 7): public client GGG (PKCE) → `GET /character/poe2/<name>`. Подключается, если регистрация прошла (Task 1 выясняет эмпирически).
+- **oauth** (Task 7): public client GGG (PKCE) → `GET /character/poe2/<name>`. Регистрация **email-gated** (`oauth@grindinggear.com`, одобрение GGG вручную) → Task 7 deferred до получения `client_id`. Manual несёт План 2.
 
 **Связь:** спека `docs/superpowers/specs/2026-06-13-companion-mvp-design.md`; гейт `docs/superpowers/spike-pob2-result.md`.
 
@@ -46,27 +46,25 @@ poe2-anekeika-companion/
 
 ---
 
-## Task 1: Эмпирически выяснить — регистрация public-клиента GGG instant или gated?
+## Task 1: Заявка на регистрацию OAuth-клиента у GGG (email-gated; письмо пишет Павел лично)
 
 **Files:** Create: `docs/superpowers/oauth-registration-note.md`
 
-Это investigation-задача (узнать факт), не код.
+Факт из политики GGG (`/developer/docs#policy`): регистрация НЕ self-service — заявка на `oauth@grindinggear.com`, одобрение вручную. **LLM-сгенерированные/низкоусилийные заявки отклоняются немедленно** → прозу письма пишет Павел, не Claude. Claude даёт только чек-лист полей.
 
-- [ ] **Step 1: Открыть страницу приложений GGG**
+- [ ] **Step 1: Павел отправляет заявку на `oauth@grindinggear.com`** (своими словами), включив поля из политики:
+  - account name + дискриминатор: `Anekeika#3160`
+  - имя приложения + тип клиента: **public** (десктоп/локальная тулза)
+  - grant types + scopes с обоснованием: Authorization Code (с PKCE); scope `account:characters` — чтение экипировки/дерева своего персонажа для расчёта билда в Path of Building 2
+  - redirect URI: `http://127.0.0.1:8765/callback`
 
-Зайти залогиненным на `https://www.pathofexile.com/my-account/applications`. Проверить: есть ли self-serve кнопка «создать приложение/client» для public-клиента, или форма-заявка / требование писать в GGG.
-
-- [ ] **Step 2: Зафиксировать вывод в `oauth-registration-note.md`**
-
-Записать одно из:
-- **instant:** есть self-serve → получен `client_id`, redirect URI `http://127.0.0.1:8765/callback`, scope `account:characters`. → Task 7 делаем в этом плане.
-- **gated:** нужна заявка/письмо → отправлено (дата), `client_id` ждём. → Task 7 помечаем deferred, План 2 завершается на manual-источнике.
+- [ ] **Step 2: Зафиксировать в `oauth-registration-note.md`:** дата заявки, статус «ожидаем client_id». **OAuth-источник (Task 7) — deferred до выдачи `client_id`.** Manual-слайс (Task 2–6) — deliverable Плана 2, не ждёт GGG.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add docs/superpowers/oauth-registration-note.md
-git commit -m "docs(oauth): зафиксирован способ регистрации public-клиента GGG"
+git commit -m "docs(oauth): заявка GGG отправлена, OAuth-источник deferred до client_id"
 ```
 
 ---
@@ -78,6 +76,8 @@ git commit -m "docs(oauth): зафиксирован способ регистр
 - Test: `src/ingest/manual.test.js`, `src/ingest/store.test.js`
 
 Нормализованный персонаж: `{ name, class, level, items, passives, source }`, где `items`/`passives` — JSON-строки в формате, который ест `loadBuildFromJSON` (= ответы legacy `get-items` / `get-passive-skills`).
+
+> **РЕФАЙН (фикстура за Cloudflare):** два JSON `get-items`/`get-passive-skills` руками не достать (Cloudflare 403). Поэтому manual-источник реально принимает **PoB-код** (с pobb.in или экспорт из PoB): base64→zlib→XML. Тогда `manual.js` отдаёт `{ pobXML }` вместо `{ items, passives }`, а `run_stats.lua` грузит через **`loadBuildFromXML(xml)`** (ветка в Task 3). Двух-JSON-формат остаётся для OAuth-ветки (Task 7), где он приходит из официального API. Имя/класс/уровень парсятся из XML (`<Build>` атрибуты). Ниже код показан для JSON-формы; при исполнении добавить XML-ветку как первичную для manual.
 
 - [ ] **Step 1: `package.json`**
 
@@ -510,13 +510,18 @@ git commit -m "feat: /poe2-refresh — персонаж в реальный да
 
 ---
 
-## Task 7: Public-OAuth источник (УСЛОВНО — если Task 1 = instant)
+## Task 7: Public-OAuth источник (DEFERRED — стартует, когда GGG выдаст `client_id`)
 
 **Files:**
 - Create: `src/ingest/oauth.js`
 - Test: `src/ingest/oauth.test.js`
 
-> Если Task 1 показал **gated** — пропустить, пометить в `oauth-registration-note.md` как deferred-follow-up. Manual-источник из Task 2–6 — рабочий MVP. Если **instant** — делаем.
+> Делается **после** одобрения заявки из Task 1 (получен `client_id`). До этого — manual-источник (Task 2–6) полностью покрывает дашборд. Это не блокирует завершение Плана 2.
+
+**Комплаенс GGG (обязательно в OAuth-клиенте, из политики):**
+- **User-Agent** каждого запроса: `OAuth {clientId}/{version} (contact: {email})`.
+- Уважать rate-limit: при `429`/`Retry-After` — ждать и не долбить (иначе доступ отзовут). Парсить `X-Rate-Limit-*`.
+- Дисклеймер в README/дашборде: «This product isn't affiliated with or endorsed by Grinding Gear Games in any way.» (добавить отдельным мелким коммитом).
 
 - [ ] **Step 1: PKCE-флоу — генерация verifier/challenge + локальный редирект**
 
